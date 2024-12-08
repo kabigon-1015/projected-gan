@@ -229,7 +229,6 @@ class ImageFolderDataset(Dataset):
         return dict(super().__getstate__(), _zipfile=None)
 
     def _load_raw_image(self, raw_idx):
-        print("bbbbbbb")
         fname = self._image_fnames[raw_idx]
         try:
             with open(fname, 'rb') as f:
@@ -238,8 +237,10 @@ class ImageFolderDataset(Dataset):
                 image = image[:, :, np.newaxis] # HW => HWC
             image = image.transpose(2, 0, 1) # HWC => CHW
             return image
-        except (SyntaxError, OSError, IOError, zipfile.BadZipFile) as e:
+        except Exception as e:
             print(f"Error loading image {fname}: {e}")
+            print(f"Current working directory: {os.getcwd()}")
+            print(f"File exists: {os.path.exists(fname)}")
             return None
 
     def _load_raw_labels(self):
