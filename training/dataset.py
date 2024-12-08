@@ -18,6 +18,7 @@ import dnnlib
 import copy
 import zipfile
 import io
+import random
 
 
 try:
