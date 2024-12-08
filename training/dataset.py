@@ -100,6 +100,11 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         image = self._load_raw_image(self._raw_idx[idx])
+        if image is None:
+            # エラーが発生した場合、別の有効な画像をランダムに選択
+            while image is None:
+                idx = random.randint(0, len(self) - 1)
+                image = self._load_raw_image(self._raw_idx[idx])
         assert isinstance(image, np.ndarray)
         assert list(image.shape) == self.image_shape
         assert image.dtype == np.uint8
@@ -224,16 +229,18 @@ class ImageFolderDataset(Dataset):
         return dict(super().__getstate__(), _zipfile=None)
 
     def _load_raw_image(self, raw_idx):
+        print("bbbbbbb")
         fname = self._image_fnames[raw_idx]
-        with self._open_file(fname) as f:
-            if pyspng is not None and self._file_ext(fname) == '.png':
-                image = pyspng.load(f.read())
-            else:
+        try:
+            with open(fname, 'rb') as f:
                 image = np.array(PIL.Image.open(f))
-        if image.ndim == 2:
-            image = image[:, :, np.newaxis] # HW => HWC
-        image = image.transpose(2, 0, 1) # HWC => CHW
-        return image
+            if image.ndim == 2:
+                image = image[:, :, np.newaxis] # HW => HWC
+            image = image.transpose(2, 0, 1) # HWC => CHW
+            return image
+        except (SyntaxError, OSError, IOError, zipfile.BadZipFile) as e:
+            print(f"Error loading image {fname}: {e}")
+            return None
 
     def _load_raw_labels(self):
         fname = 'dataset.json'
