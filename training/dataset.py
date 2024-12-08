@@ -16,6 +16,9 @@ import json
 import torch
 import dnnlib
 import copy
+import zipfile
+import io
+
 
 try:
     import pyspng
@@ -196,10 +199,17 @@ class ImageFolderDataset(Dataset):
             raise IOError('No image files found in the specified path')
 
         name = os.path.splitext(os.path.basename(self._path))[0]
-        raw_shape = [len(self._image_fnames)] + list(self._load_raw_image(0).shape)
+        raw_shape = self._get_raw_shape()
         if resolution is not None and (raw_shape[2] != resolution or raw_shape[3] != resolution):
             raise IOError('Image files do not match the specified resolution')
         super().__init__(name=name, raw_shape=raw_shape, **super_kwargs)
+
+    def _get_raw_shape(self):
+        for idx in range(len(self._image_fnames)):
+            image = self._load_raw_image(idx)
+            if image is not None:
+                return [len(self._image_fnames)] + list(image.shape)
+        raise IOError('Could not load any valid image')
 
     @staticmethod
     def _file_ext(fname):
@@ -231,8 +241,15 @@ class ImageFolderDataset(Dataset):
     def _load_raw_image(self, raw_idx):
         fname = self._image_fnames[raw_idx]
         try:
-            with open(fname, 'rb') as f:
-                image = np.array(PIL.Image.open(f))
+            if self._type == 'dir':
+                with open(os.path.join(self._path, fname), 'rb') as f:
+                    image = np.array(PIL.Image.open(f))
+            elif self._type == 'zip':
+                with self._get_zipfile().open(fname, 'r') as f:
+                    image = np.array(PIL.Image.open(io.BytesIO(f.read())))
+            else:
+                return None
+
             if image.ndim == 2:
                 image = image[:, :, np.newaxis] # HW => HWC
             image = image.transpose(2, 0, 1) # HWC => CHW
@@ -240,7 +257,7 @@ class ImageFolderDataset(Dataset):
         except Exception as e:
             print(f"Error loading image {fname}: {e}")
             print(f"Current working directory: {os.getcwd()}")
-            print(f"File exists: {os.path.exists(fname)}")
+            print(f"File exists: {os.path.exists(os.path.join(self._path, fname)) if self._type == 'dir' else fname in self._get_zipfile().namelist()}")
             return None
 
     def _load_raw_labels(self):
